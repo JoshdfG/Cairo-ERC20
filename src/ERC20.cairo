@@ -40,6 +40,7 @@ mod ERC20{
         amount: u256,
     }
 
+    #[derive(Drop,starknet::Event)]
     struct Transfer{
         #[key]
         from:ContractAddress,
@@ -47,6 +48,7 @@ mod ERC20{
         amount:u26,
     }
 
+    #[derive(Drop,starknet::Event)]
     struct Approval{
         #[key]
         owner:ContractAddress,
@@ -54,9 +56,38 @@ mod ERC20{
         amount:u256,
     }
 
+    #[derive(Drop,starknet::Event)]
     struct Burn{
         #[key]
         from:ContractAddress,
         amount:u256,
+    }
+
+    #[external(v0)]
+    [abi(embed_v0)]
+    impl ERC20impl of IERC20<ContractState>{
+        fn name(self:@ContractState)->felt252{
+            self.name.read()
+        }
+
+        fn symbol(self:@ContractState)->felt252{
+            self.symbol.read()
+        }
+
+        fn decimal(self:@ContractState)->u8{
+            self.decimal.read()
+        }
+
+        fn totalSupply(self:@ContractState)->u256{
+            self.totalSupply.read()
+        }
+
+        fn balanceOf(self:@ContractState, owner:ContractAddress)->u256{
+            self.balanceOf.read(owner)
+        }
+
+        fn allowance(self:@ContractState, owner:ContractAddress, spender:ContractAddress)->u256{
+            self.allowances.read(owner,spender)
+        }
     }
 }
