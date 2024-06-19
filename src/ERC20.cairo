@@ -23,4 +23,27 @@ mod ERC20{
         self.symbol.write(symbol),
         self.decimals.write(decimals),
     }
+
+    #[event]
+    #[derive(Drop,starknet::Event)]
+    enum Event{
+        Transfer:Transfer,
+        Approval:Approval,
+        Burn:Burn,
+        Mint:Mint,
+    }
+
+    #[derive(Drop,starknet::Event)]
+    struct Mint{
+        #[key]
+        to: ContractAddress,
+        amount: u256,
+    }
+
+    struct Transfer{
+        #[key]
+        from:ContractAddress,
+        to:ContractAddress,
+        amount:u26,
+    }
 }
