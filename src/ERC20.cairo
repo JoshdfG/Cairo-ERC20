@@ -46,4 +46,17 @@ mod ERC20{
         to:ContractAddress,
         amount:u26,
     }
+
+    struct Approval{
+        #[key]
+        owner:ContractAddress,
+        spender:ContractAddress,
+        amount:u256,
+    }
+
+    struct Burn{
+        #[key]
+        from:ContractAddress,
+        amount:u256,
+    }
 }
