@@ -34,14 +34,14 @@ pub mod ERC20 {
         Mint: Mint,
     }
 
-    #[derive(Drop, Serde, starknet::Event)]
+    #[derive(Drop, starknet::Event)]
     struct Mint {
         #[key]
         to: ContractAddress,
         amount: u256,
     }
 
-    #[derive(Drop, Serde, starknet::Event)]
+    #[derive(Drop, starknet::Event)]
     struct Transfer {
         #[key]
         from: ContractAddress,
@@ -49,7 +49,7 @@ pub mod ERC20 {
         amount: u26,
     }
 
-    #[derive(Drop, Serde, starknet::Event)]
+    #[derive(Drop, starknet::Event)]
     struct Approval {
         #[key]
         owner: ContractAddress,
@@ -57,7 +57,7 @@ pub mod ERC20 {
         amount: u256,
     }
 
-    #[derive(Drop, Serde, starknet::Event)]
+    #[derive(Drop, starknet::Event)]
     struct Burn {
         #[key]
         from: ContractAddress,
