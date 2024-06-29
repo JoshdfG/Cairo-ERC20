@@ -1,28 +1,62 @@
-#[starknet::contract]
-pub mod ERC20 {
-    use contract::module::{
-        IERC20Dispatcher, IERC20, IERC20LibraryDispatcher, IERC20DispatcherSerde
-    };
-    use super::{IERC20Dispatcher, IERC20, IERC20LibraryDispatcher, IERC20DispatcherSerde};
-    use starknet::ContractAddress;
-    use core::starknet::event::EventEmitter;
+use starknet::ContractAddress;
 
+#[starknet::interface]
+pub trait IERC20<TContractState> {
+    fn name(self: @TContractState) -> felt252;
+
+    fn symbol(self: @TContractState) -> felt252;
+
+    fn decimals(self: @TContractState) -> u8;
+
+    fn total_supply(self: @TContractState) -> u256;
+
+    fn balance_of(self: @TContractState, account: ContractAddress) -> u256;
+
+    fn allowance(self: @TContractState, owner: ContractAddress, spender: ContractAddress) -> u256;
+
+    fn transfer(ref self: TContractState, recipient: ContractAddress, amount: u256) -> bool;
+
+    fn transfer_from(
+        ref self: TContractState, sender: ContractAddress, recipient: ContractAddress, amount: u256
+    ) -> bool;
+
+    fn approve(ref self: TContractState, spender: ContractAddress, amount: u256) -> bool;
+
+    fn mint(ref self: TContractState, to: ContractAddress, value: u256);
+
+    fn burn(ref self: TContractState, from: ContractAddress, value: u256);
+}
+
+
+#[starknet::contract]
+mod ERC20 {
+    use core::starknet::event::EventEmitter;
+    use super::IERC20;
+    use starknet::{ContractAddress, contract_address_const, get_caller_address};
 
     #[storage]
     struct Storage {
         name: felt252,
         symbol: felt252,
-        decimals: u8,
-        totalSupply: u256,
-        balances: LegacyMap::<ContractAddress, u256>,
+        total_supply: u256,
         allowances: LegacyMap::<(ContractAddress, ContractAddress), u256>,
+        balances: LegacyMap::<ContractAddress, u256>,
+        decimals: u8,
+        owner: ContractAddress,
     }
 
     #[constructor]
-    fn constructor(ref self: ContractState, name: felt252, symbol: felt252, decimals: u8) {
-        self.name.write(name)
-        self.symbol.write(symbol)
-        self.decimals.write(decimals)
+    fn constructor(
+        ref self: ContractState,
+        _name: felt252,
+        _symbol: felt252,
+        _decimals: u8,
+        _owner: ContractAddress
+    ) {
+        self.name.write(_name);
+        self.symbol.write(_symbol);
+        self.decimals.write(_decimals);
+        self.owner.write(_owner);
     }
 
     #[event]
@@ -30,23 +64,30 @@ pub mod ERC20 {
     enum Event {
         Transfer: Transfer,
         Approval: Approval,
-        Burn: Burn,
         Mint: Mint,
+        Burn: Burn,
+    }
+
+    #[derive(Drop, starknet::Event)]
+    struct Transfer {
+        #[key]
+        sender: ContractAddress,
+        recipient: ContractAddress,
+        amount: u256
     }
 
     #[derive(Drop, starknet::Event)]
     struct Mint {
         #[key]
         to: ContractAddress,
-        amount: u256,
+        value: u256,
     }
 
     #[derive(Drop, starknet::Event)]
-    struct Transfer {
+    struct Burn {
         #[key]
         from: ContractAddress,
-        to: ContractAddress,
-        amount: u26,
+        value: u256,
     }
 
     #[derive(Drop, starknet::Event)]
@@ -57,15 +98,8 @@ pub mod ERC20 {
         amount: u256,
     }
 
-    #[derive(Drop, starknet::Event)]
-    struct Burn {
-        #[key]
-        from: ContractAddress,
-        amount: u256,
-    }
-
     #[abi(embed_v0)]
-    impl ERC20impl of super::IERC20<ContractState> {
+    impl ERC20Impl of IERC20<ContractState> {
         fn name(self: @ContractState) -> felt252 {
             self.name.read()
         }
@@ -74,75 +108,79 @@ pub mod ERC20 {
             self.symbol.read()
         }
 
-        fn decimal(self: @ContractState) -> u8 {
-            self.decimal.read()
+        fn decimals(self: @ContractState) -> u8 {
+            self.decimals.read()
         }
 
-        fn totalSupply(self: @ContractState) -> u256 {
-            self.totalSupply.read()
+        fn total_supply(self: @ContractState) -> u256 {
+            self.total_supply.read()
         }
 
-        fn balanceOf(self: @ContractState, owner: ContractAddress) -> u256 {
-            self.balanceOf.read(owner)
+        fn balance_of(self: @ContractState, account: ContractAddress) -> u256 {
+            self.balances.read(account)
         }
 
         fn allowance(
             self: @ContractState, owner: ContractAddress, spender: ContractAddress
         ) -> u256 {
-            self.allowances.read(owner, spender)
+            self.allowances.read((owner, spender))
         }
 
-        fn approve(ref self: @ContractState, spender: ContractAddress, amount: u256) {
+        fn transfer(ref self: ContractState, recipient: ContractAddress, amount: u256) -> bool {
             let msg_sender = get_caller_address();
-            self.allowance.write((msg_sender, spender), amount);
+            self.transfer_(msg_sender, amount);
+            true
+        }
+
+        fn transfer_from(
+            ref self: ContractState,
+            sender: ContractAddress,
+            recipient: ContractAddress,
+            amount: u256
+        ) -> bool {
+            let msg_sender = get_caller_address();
+            let allowance = self.allowance(sender, msg_sender);
+            assert(allowance >= amount, 'insufficient allowance');
+            self.transfer_(recipient, amount);
+            self.allowances.write((sender, msg_sender), allowance - amount);
+            true
+        }
+
+        fn approve(ref self: ContractState, spender: ContractAddress, amount: u256) -> bool {
+            let msg_sender = get_caller_address();
+            self.allowances.write((spender, msg_sender), amount);
             self.emit(Approval { owner: msg_sender, spender: spender, amount: amount });
+            true
         }
 
-        fn transferFrom(
-            ref self: ContractState, owner: ContractAddress, to: ContractAddress, amount: u256
-        ) {
-            let msg_sender = get_caller_address();
-            assert(
-                self.allowance.read((owner, msg_sender)) >= amount,
-                'You do not have enough allowance'
-            );
-            self._transfer(owner, to, amount);
-            self.allowances.write((owner, msg_sender), allowance - amount);
-        }
-
-        fn mint(ref self: ContractState, to: ContractAddress, amount: u256) {
-            let total_supply = self.totalSupply.read();
-            self.totalSupply.write(total_supply + amount);
+        fn mint(ref self: ContractState, to: ContractAddress, value: u256) {
+            let total_supply = self.total_supply.read();
+            self.total_supply.write(total_supply + value);
             let balance = self.balances.read(to);
-            self.balances.write(to, balance + amount)
-            self.emit(Mint { to: to, amount: amount });
+            self.balances.write(to, balance + value);
+            self.emit(Mint { to, value });
         }
 
-        fn burn(ref self: ContractState, from: ContractAddress, to: ContractAddress, amount: u256) {
-            let balance = self.balances.read();
-            assert(balance >= amount, 'Insufficient balance');
-            self.balances.write(from, balance - amount);
-            let total_supply = self.totalSupply.read();
-            self.totalSupply.write(total_supply - amount);
-            self.emit(Burn { from: from, amount: amount })
+        fn burn(ref self: ContractState, from: ContractAddress, value: u256) {
+            let balance = self.balances.read(from);
+            assert(balance >= value, 'Insufficient balance');
+            self.balances.write(from, balance - value);
+            let total_supply = self.total_supply.read();
+            self.total_supply.write(total_supply - value);
+            self.emit(Burn { from, value })
         }
     }
 
     #[generate_trait]
     impl Private of PrivateTrait {
-        fn _transfer(
-            ref self: ContractState,
-            sender: ContractAddress,
-            recipient: ContractAddress,
-            amount: u256
-        ) {
-            let address_zero: ContractAddress = contract_address_const::<0>();
-            assert(recipient != address_zero, "Address zero not allowed");
-            assert(amount > 0 && self.balances.read(sender) >= amount, "Insufficient balance");
-
-            self.balances.write(sender, self.balances.read(sender) - amount);
-            self.balances.write(recipient, self.balances.read(recipient) + amount);
-            self.emit(Transfer { from: sender, to: recipient, amount: amount });
+        fn transfer_(ref self: ContractState, receiver: ContractAddress, amount: u256) -> bool {
+            let sender = self.owner.read();
+            let caller = get_caller_address();
+            assert(caller == sender, 'Not owner');
+            self.balances.write(receiver, self.balances.read(receiver) + amount);
+            self.balances.write(receiver, self.balances.read(caller) - amount);
+            self.emit(Transfer { sender, recipient: receiver, amount });
+            true
         }
     }
 }
