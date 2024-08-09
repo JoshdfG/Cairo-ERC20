@@ -1,13 +1,18 @@
 [package]
-name = "registry"
+name = "cairo_2"
 version = "0.1.0"
 edition = "2023_11"
-sierra = true
-
 
 # See more keys and their definitions at https://docs.swmansion.com/scarb/docs/reference/manifest.html
 
 [dependencies]
-starknet = ">=2.6.3"
+starknet = "2.6.4"
+
+[dev-dependencies]
+snforge_std = { git = "https://github.com/foundry-rs/starknet-foundry", tag = "v0.27.0" }
 
 [[target.starknet-contract]]
+sierra = true
+
+[scripts]
+test = "snforge test"
